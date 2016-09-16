@@ -1,0 +1,130 @@
+---
+title: "An animated GIF of rising temperatures using ggplot"
+author: "Ian Sudbery"
+date: "16 September 2016"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=9, fig.height=5.5, dpi=72, fig.path='Figs/',
+                      warning=FALSE, message=FALSE)
+```
+
+It seems de-rigour these days that whenever Mick Watson publishes one of his nice "How to reproduce this plot in R" posts, someone has to reply with "but it would be so much better in ggplot".This morning Mick published [just such a post](http://www.opiniomics.org/how-to-produce-an-animated-gif-of-rise-in-global-temperature-in-r/) on reproducing NASA's [rising global temperature GIF](http://earthobservatory.nasa.gov/blogs/earthmatters/2016/09/12/heres-how-the-warmest-august-in-136-years-looks-in-chart-form/). Since no-one has posted a ggplot reply yet, and since I wanted an excuse to play with David Robson's [gganimate package](https://github.com/dgrtwo/gganimate), I thought I'd have a go to see how easy it would be. 
+
+First we need to get the data. It needs to be almost, but not quite in the same format as Mick had it:
+
+```{r}
+# download data
+temp_data <- read.table("http://data.giss.nasa.gov/gistemp/tabledata_v3/GLB.Ts.txt", 
+                skip=7, header=TRUE, nrows=143, colClasses = "character")
+
+# and the sesonal adjustments
+s <- read.table("http://data.giss.nasa.gov/gistemp/faq/merra2_seas_anom.txt", 
+                skip=3, header=TRUE, colClasses = "character")
+sa <- as.numeric(s$seas_anom)
+
+# clean data
+temp_data <- temp_data[,-14:-20]
+temp_data[temp_data=="****"] <- NA
+temp_data = sapply(temp_data, as.numeric)
+temp_data[,-1] = temp_data[,-1]/100
+temp_data[,-1] = sweep(temp_data[,-1],2, sa, "+")
+
+# The original data repeats the row headers several times and the above converts those to NAs
+temp_data = temp_data[!is.na(temp_data[,1]),]
+```
+
+So far this is pretty much the same as Mick, except that we've done the seasonal adjustment on beforehand where as Mick does it on the fly. `ggplot` requires its data in a tidy or molten format - one column per variable, one row per obsevation. 
+
+```{r}
+library(reshape2)
+molten_temps <- melt(data.frame(temp_data), id.vars="Year", variable.name="month", value.name="temp")
+```
+
+So first we want to get the static plot. Getting something vaguely right is pretty easy:
+```{r}
+library(ggplot2)
+ymin=-3
+ymax=3
+
+# we want the month on the x axis, the year on the y and a different colour for each year
+g <- ggplot(molten_temps, aes(x=month, y=temp, col=Year, group=Year)) + 
+  
+  #plot the data with a line
+  geom_line() + 
+  
+  #we want the colours to be a gradient from grey to blue to red
+  scale_color_gradientn(colours=c("grey","blue","red")) + 
+  
+  #and the y axis to go from -3 to 3 with major ticks every 1.0 degrees
+  scale_y_continuous(limits=c(ymin,ymax), breaks=ymin:ymax) + 
+  
+  #and a simple plain theme for now
+  theme_bw() 
+print(g)
+```
+
+Okay, that looks vaguely right, in terms of its shape, the colors and the limits of the plot. Now we need to "theme" it to look like the original, and add the titles. This bit is a bit of a hassle, but here is what I came up with:
+
+```{r}
+#start with theme_bw are remove what we don't wan
+my_theme = theme_bw(base_size=20) + 
+            # no axis titles and the plot title in the top
+    theme( axis.title=element_blank(),
+           plot.title=element_text(size=18,hjust=0, margin=margin(t=0)),
+           
+           # we want no minor grid lines, not major ones on the x either, but thick black dotted ones on y
+           panel.grid.major.x=element_blank(),
+           panel.grid.major.y=element_line(linetype=3, color="black", size=0.7),
+           
+           # no box around the plot
+           panel.border=element_blank(),
+           
+           #and no legend
+           legend.position="none")
+
+#store the heading for future use
+main=expression(paste("Temperature ","Anomaly ","(",degree,"C)"))
+sub="(Difference from 1980-2015 annual mean)"
+ 
+# add the themes and the titles
+g <- g +
+     my_theme +
+     ggtitle(main) +
+     annotate("text", x="Jan", y=3, label=sub, vjust=-0.8,hjust=0.15)
+print(g)
+```
+
+Looking pretty good I reckon. Now the fun bit - lets animate it with the `gganimate` pacakge (see [here](https://github.com/dgrtwo/gganimate) to install gganimate):
+
+```{r, interval=0.1}
+library(gganimate)
+g <- g + aes(frame=Year, cumulative=TRUE)
+gg_animate(g, "draft.gif", title_frame=FALSE,ani.width=650, ani.height=400, interval=0.1)
+```
+![](draft.gif)
+
+So that was pretty easy! I like gganimate a lot! But can we go one step futher and make it look even more like the original? Two differences I noticed: the colours are less a bit more muted, and as the animation runs thorugh the current year is highlighted, while previous years fade into the background. Now we are at this point with our ggplot, going that extra mile is easy!
+
+```{r, aniopts='loop', interval=0.1}
+library(tidyr)
+library(dplyr)
+library(scales)
+
+cross_temps <- crossing(molten_temps, frame = unique(molten_temps$Year)) %>% filter(Year<=frame)
+g2 <- ggplot(cross_temps, aes(x=month, y=temp, col=Year, group=Year, frame=frame, alpha=Year==frame)) + 
+      geom_line() + 
+      scale_color_gradientn(colours=c("grey",muted("blue"),muted("red"))) + 
+      scale_y_continuous(limits=c(ymin,ymax), breaks=ymin:ymax) + 
+      my_theme + 
+      ggtitle(main) +
+      annotate("text", x="Jan", y=3, label=sub, vjust=-0.8,hjust=0.15)  + 
+      geom_text(aes(label=frame), x=7, y=0.5, size=6)
+
+gg_animate(g2, "final.gif", title_frame=FALSE,ani.width=650, ani.height=400, interval=0.1)
+```
+
+![](final.gif)
+
+I won't say it was easier or quicker than doing it in base R, but it wasn't too bad, and I think the result are fairly pretty. 
