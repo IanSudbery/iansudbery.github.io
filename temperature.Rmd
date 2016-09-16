@@ -68,7 +68,7 @@ print(g)
 Okay, that looks vaguely right, in terms of its shape, the colors and the limits of the plot. Now we need to "theme" it to look like the original, and add the titles. This bit is a bit of a hassle, but here is what I came up with:
 
 ```{r}
-#start with theme_bw are remove what we don't wan
+#start with theme_bw and remove what we don't want
 my_theme = theme_bw(base_size=20) + 
             # no axis titles and the plot title in the top
     theme( axis.title=element_blank(),
