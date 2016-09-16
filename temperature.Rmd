@@ -74,7 +74,7 @@ my_theme = theme_bw(base_size=20) +
     theme( axis.title=element_blank(),
            plot.title=element_text(size=18,hjust=0, margin=margin(t=0)),
            
-           # we want no minor grid lines, not major ones on the x either, but thick black dotted ones on y
+           # we want no minor grid lines, no major ones on the x either, but thick black dotted ones on y
            panel.grid.major.x=element_blank(),
            panel.grid.major.y=element_line(linetype=3, color="black", size=0.7),
            
@@ -127,4 +127,4 @@ gg_animate(g2, "final.gif", title_frame=FALSE,ani.width=650, ani.height=400, int
 
 ![](final.gif)
 
-I won't say it was easier or quicker than doing it in base R, but it wasn't too bad, and I think the result are fairly pretty. 
+I won't say it was easier or quicker than doing it in base R, but it wasn't too bad, and I think the results are fairly pretty. 
